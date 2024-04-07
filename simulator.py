@@ -1,5 +1,6 @@
 import numpy as np
 from events import EventManager, Arrival, Departure
+from agents import Workstation_I1, Workstation_I2, Workstation_I3
 
 class Simulator:
     def __init__(self, workstation_list, arrival_rate_dict, simulation_steps): # arrival_rate_dict = {station_id: arrival rate,...}
@@ -24,7 +25,7 @@ class Simulator:
 
 
     def generate_new_arrivals_one_station(self, i):
-        self.event_manager.addevent(Arrival(self.time + np.random.exponential(1. / self.arrival_rate[i]), 'normal', i))
+        self.event_manager.addevent(Arrival(self.time + np.random.exponential(1. / self.arrival_rate[i]), 'normal', self.workstation_list[i]))
 
     def generate_new_arrivals(self):
         for i in self.I1:
@@ -46,15 +47,28 @@ class Simulator:
             self.time = self.time + time_diff
             # simulate events
             if event.type=='arrival':
-                next_event = self.workstation_list[event.workstation].customer_arrive(event)
+                next_event = self.workstation_list[event.workstation.id].customer_arrive(event)
                 if event.workstation.type in ['I1', 'I3']:
                     self.generate_new_arrivals_one_station(event.workstation.id)
             elif event.type=='departure':
-                next_event = self.workstation_list[event.workstation].customer_departure(event)
+                next_event = event.workstation.customer_departure(event)
             else:
                 raise ValueError('event type nonexist')
             if isinstance(next_event, int):
                 pass # if the returned a int, no new event
             else:
                 self.event_manager.addevent(next_event)
+
+# TODO 1. test simulator
+workstation_list = [Workstation_I3(0, 0, 0, 10, 10*10)
+                    ]
+#workstation_list.append(Workstation_I1(3,0, 10, 10, 10*10, 100, workstation_list[1]))
+#workstation_list.append(Workstation_I1(4,0, 20, 10, 10*10, 100, workstation_list[2]))
+arrival_rate_dict = {0: 0.05}
+simulation_steps = 10000.
+simulator = Simulator(workstation_list, arrival_rate_dict, simulation_steps)
+simulator.run_simulation()
+for ws in workstation_list:
+    ws.flow_stats(total_time=simulation_steps)
+workstation_list[0].plot_queue()
 
