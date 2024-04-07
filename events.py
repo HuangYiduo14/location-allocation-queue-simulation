@@ -1,4 +1,6 @@
 import heapq as hq
+
+
 class EventManager:
     def __init__(self):
         self.event_queue = []
@@ -9,6 +11,7 @@ class EventManager:
 
     def getevent(self):
         return hq.heappop(self.event_queue)
+
 
 class Event:
     def __init__(self, time, token_type, workstation):
@@ -26,10 +29,12 @@ class Event:
     def __repr__(self):
         return self.type, self.time, self.token_type, self.workstation
 
+
 class Arrival(Event):
     def __init__(self, time, token_type, workstation):
         super().__init__(time, token_type, workstation)
         self.type = 'arrival'
+
 
 class Departure(Event):
     def __init__(self, time, token_type, workstation):

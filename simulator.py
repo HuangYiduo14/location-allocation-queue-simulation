@@ -2,8 +2,10 @@ import numpy as np
 from events import EventManager, Arrival, Departure
 from workstations import Workstation_I1, Workstation_I2, Workstation_I3
 
+
 class Simulator:
-    def __init__(self, workstation_list, arrival_rate_dict, simulation_steps): # arrival_rate_dict = {station_id: arrival rate,...}
+    def __init__(self, workstation_list, arrival_rate_dict,
+                 simulation_steps):  # arrival_rate_dict = {station_id: arrival rate,...}
         self.time = 0
         self.workstation_list = workstation_list
         self.arrival_rate = arrival_rate_dict
@@ -12,7 +14,7 @@ class Simulator:
         self.I2 = []
         self.I3 = []
         for ws in workstation_list:
-            if ws.type=='I1':
+            if ws.type == 'I1':
                 self.I1.append(ws.id)
             elif ws.type == 'I2':
                 self.I2.append(ws.id)
@@ -23,9 +25,9 @@ class Simulator:
         self.event_manager = EventManager()
         self.generate_new_arrivals()
 
-
     def generate_new_arrivals_one_station(self, i):
-        self.event_manager.addevent(Arrival(self.time + np.random.exponential(1. / self.arrival_rate[i]), 'normal', self.workstation_list[i]))
+        self.event_manager.addevent(
+            Arrival(self.time + np.random.exponential(1. / self.arrival_rate[i]), 'normal', self.workstation_list[i]))
 
     def generate_new_arrivals(self):
         for i in self.I1:
@@ -46,34 +48,35 @@ class Simulator:
             self.forward_time(time_diff)
             self.time = self.time + time_diff
             # simulate events
-            if event.type=='arrival':
+            if event.type == 'arrival':
                 next_events = self.workstation_list[event.workstation.id].customer_arrive(event)
                 if event.workstation.type in ['I1', 'I3']:
                     self.generate_new_arrivals_one_station(event.workstation.id)
-            elif event.type=='departure':
+            elif event.type == 'departure':
                 next_events = event.workstation.customer_departure(event)
             else:
                 raise ValueError('event type nonexist')
             for next_event in next_events:
                 self.event_manager.addevent(next_event)
 
+
 # test simulator:
 if __name__ == '__main__':
-    workstation_list = [Workstation_I3(id=0, x=0, y=0, E_service_time=10, Var_service_time=4, service_distribution='norm'),
-                        Workstation_I2(id=1, x=10, y=0, E_service_time=10, Var_service_time=10 * 10, service_distribution='exp'),
-                        Workstation_I2(id=2, x=20, y=0, E_service_time=10, Var_service_time=10 * 10, service_distribution='exp')
-                        ]
-    workstation_list.append(Workstation_I1(id=3,x=0, y=10, E_service_time=10,
-                                           Var_service_time=10*10, special_pod_size=100,
+    workstation_list = [
+        Workstation_I3(id=0, x=0, y=0, E_service_time=10, Var_service_time=4, service_distribution='norm'),
+        Workstation_I2(id=1, x=10, y=0, E_service_time=10, Var_service_time=10 * 10, service_distribution='exp'),
+        Workstation_I2(id=2, x=20, y=0, E_service_time=10, Var_service_time=10 * 10, service_distribution='exp')
+        ]
+    workstation_list.append(Workstation_I1(id=3, x=0, y=10, E_service_time=10,
+                                           Var_service_time=10 * 10, special_pod_size=100,
                                            assigned_workstation_I2=workstation_list[1], service_distribution='exp'))
-    workstation_list.append(Workstation_I1(id=4,x=0, y=20, E_service_time=10,
-                                           Var_service_time=10*10, special_pod_size=100,
+    workstation_list.append(Workstation_I1(id=4, x=0, y=20, E_service_time=10,
+                                           Var_service_time=10 * 10, special_pod_size=100,
                                            assigned_workstation_I2=workstation_list[2], service_distribution='exp'))
-    arrival_rate_dict = {0: 0.05, 3:0.05, 4:0.05}
+    arrival_rate_dict = {0: 0.05, 3: 0.05, 4: 0.05}
     simulation_steps = 100000.
     simulator = Simulator(workstation_list, arrival_rate_dict, simulation_steps)
     simulator.run_simulation()
     for ws in workstation_list:
         ws.flow_stats(total_time=simulation_steps)
     workstation_list[0].plot_queue()
-

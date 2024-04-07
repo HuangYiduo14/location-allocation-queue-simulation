@@ -2,6 +2,8 @@ import numpy as np
 from events import Arrival, Departure
 from util import workstation_travel_time
 import matplotlib.pyplot as plt
+
+
 # workstaion: I1, I2, and I3
 class WorkStation:
     def __init__(self, id, x, y, E_service_time, Var_service_time, service_distribution='exp'):
@@ -34,7 +36,7 @@ class WorkStation:
         self.event_time.append(arrival_time)
         self.queue_length_when_event.append(self.waiting_customers)
         self.event_time.append(arrival_time)
-        self.queue_length_when_event.append(self.waiting_customers+1)
+        self.queue_length_when_event.append(self.waiting_customers + 1)
 
     def record_departure(self, departure_time):
         # record departure time and event
@@ -44,7 +46,7 @@ class WorkStation:
         self.event_time.append(departure_time)
         self.queue_length_when_event.append(self.waiting_customers)
         self.event_time.append(departure_time)
-        self.queue_length_when_event.append(self.waiting_customers-1)
+        self.queue_length_when_event.append(self.waiting_customers - 1)
 
     def __repr__(self):
         return self.id, self.type
@@ -53,7 +55,8 @@ class WorkStation:
         if self.service_distribution == 'exponential' or self.service_distribution == 'exp':
             return np.random.exponential(scale=self.E_service_time)
         elif self.service_distribution == 'normal' or self.service_distribution == 'norm':
-            return max(0., self.E_service_time + np.sqrt(self.Var_service_time) * np.random.normal()) # we must truncate the norma
+            return max(0., self.E_service_time + np.sqrt(
+                self.Var_service_time) * np.random.normal())  # we must truncate the norma
         else:
             raise ValueError('unknown service time distribution')
 
@@ -71,7 +74,7 @@ class WorkStation:
         return [new_departure]
 
     def customer_departure(self, departure_event: Departure):
-        assert self.waiting_customers>0
+        assert self.waiting_customers > 0
         departure_time = departure_event.time
         # record arrival time and event
         self.record_departure(departure_time)
@@ -81,16 +84,17 @@ class WorkStation:
     def flow_stats(self, total_time, cv2_arrival=1.):
         time_array = np.array(self.event_time)
         queue_array = np.array(self.queue_length_when_event)
-        time_diff = time_array[1:]-time_array[:-1]
+        time_diff = time_array[1:] - time_array[:-1]
         queue_length = queue_array[1:]
         total_sojourn = np.dot(time_diff, queue_length)
-        avg_sojourn_sim = total_sojourn/self.arrival_count
+        avg_sojourn_sim = total_sojourn / self.arrival_count
         print('avg sojourn time simulation: ', avg_sojourn_sim)
-        flow = self.arrival_count/total_time
-        rho = flow*self.E_service_time
-        assert rho<1.
-        cv2_service_time = self.Var_service_time/self.E_service_time/self.E_service_time
-        sojourn_theory = rho/(1.-rho)*(cv2_service_time+cv2_arrival)/2.*self.E_service_time + self.E_service_time
+        flow = self.arrival_count / total_time
+        rho = flow * self.E_service_time
+        assert rho < 1.
+        cv2_service_time = self.Var_service_time / self.E_service_time / self.E_service_time
+        sojourn_theory = rho / (1. - rho) * (
+                    cv2_service_time + cv2_arrival) / 2. * self.E_service_time + self.E_service_time
         print('sojourn time theory', sojourn_theory)
         print('workstation id:', self.id)
         print('number of arrivals', self.arrival_count)
@@ -102,19 +106,23 @@ class WorkStation:
         plt.show()
         plt.savefig('queue over time.png')
 
+
 class Workstation_I2(WorkStation):
-    def __init__(self, id, x, y, E_service_time, Var_service_time,service_distribution):
-        super().__init__(id, x, y, E_service_time, Var_service_time,service_distribution)
+    def __init__(self, id, x, y, E_service_time, Var_service_time, service_distribution):
+        super().__init__(id, x, y, E_service_time, Var_service_time, service_distribution)
         self.type = 'I2'
 
+
 class Workstation_I3(WorkStation):
-    def __init__(self, id, x, y, E_service_time, Var_service_time,service_distribution):
-        super().__init__(id, x, y, E_service_time, Var_service_time,service_distribution)
+    def __init__(self, id, x, y, E_service_time, Var_service_time, service_distribution):
+        super().__init__(id, x, y, E_service_time, Var_service_time, service_distribution)
         self.type = 'I3'
+
 
 class Workstation_I1(WorkStation):
 
-    def __init__(self, id, x, y, E_service_time, Var_service_time, special_pod_size: int, assigned_workstation_I2: WorkStation, service_distribution):
+    def __init__(self, id, x, y, E_service_time, Var_service_time, special_pod_size: int,
+                 assigned_workstation_I2: WorkStation, service_distribution):
         super().__init__(id, x, y, E_service_time, Var_service_time, service_distribution)
         self.type = 'I1'
         self.special_pod_size = special_pod_size
