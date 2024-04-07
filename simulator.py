@@ -1,6 +1,6 @@
 import numpy as np
 from events import EventManager, Arrival, Departure
-from agents import Workstation_I1, Workstation_I2, Workstation_I3
+from workstations import Workstation_I1, Workstation_I2, Workstation_I3
 
 class Simulator:
     def __init__(self, workstation_list, arrival_rate_dict, simulation_steps): # arrival_rate_dict = {station_id: arrival rate,...}
@@ -57,17 +57,23 @@ class Simulator:
             for next_event in next_events:
                 self.event_manager.addevent(next_event)
 
-workstation_list = [Workstation_I3(0, 0, 0, 10, 10 * 10),
-                    Workstation_I2(1, 10, 0, 10, 10 * 10),
-                    Workstation_I2(2, 20, 0, 10, 10 * 10)
-                    ]
-workstation_list.append(Workstation_I1(3,0, 10, 10, 10*10, 100, workstation_list[1]))
-workstation_list.append(Workstation_I1(4,0, 20, 10, 10*10, 100, workstation_list[2]))
-arrival_rate_dict = {0: 0.05, 3:0.05, 4:0.05}
-simulation_steps = 1000000.
-simulator = Simulator(workstation_list, arrival_rate_dict, simulation_steps)
-simulator.run_simulation()
-for ws in workstation_list:
-    ws.flow_stats(total_time=simulation_steps)
-#workstation_list[0].plot_queue()
+# test simulator:
+if __name__ == '__main__':
+    workstation_list = [Workstation_I3(id=0, x=0, y=0, E_service_time=10, Var_service_time=4, service_distribution='norm'),
+                        Workstation_I2(id=1, x=10, y=0, E_service_time=10, Var_service_time=10 * 10, service_distribution='exp'),
+                        Workstation_I2(id=2, x=20, y=0, E_service_time=10, Var_service_time=10 * 10, service_distribution='exp')
+                        ]
+    workstation_list.append(Workstation_I1(id=3,x=0, y=10, E_service_time=10,
+                                           Var_service_time=10*10, special_pod_size=100,
+                                           assigned_workstation_I2=workstation_list[1], service_distribution='exp'))
+    workstation_list.append(Workstation_I1(id=4,x=0, y=20, E_service_time=10,
+                                           Var_service_time=10*10, special_pod_size=100,
+                                           assigned_workstation_I2=workstation_list[2], service_distribution='exp'))
+    arrival_rate_dict = {0: 0.05, 3:0.05, 4:0.05}
+    simulation_steps = 100000.
+    simulator = Simulator(workstation_list, arrival_rate_dict, simulation_steps)
+    simulator.run_simulation()
+    for ws in workstation_list:
+        ws.flow_stats(total_time=simulation_steps)
+    workstation_list[0].plot_queue()
 

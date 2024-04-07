@@ -4,7 +4,7 @@ from util import workstation_travel_time
 import matplotlib.pyplot as plt
 # workstaion: I1, I2, and I3
 class WorkStation:
-    def __init__(self, id, x, y, E_service_time, Var_service_time):
+    def __init__(self, id, x, y, E_service_time, Var_service_time, service_distribution='exp'):
         self.id = id
         self.x = x
         self.y = y
@@ -13,6 +13,7 @@ class WorkStation:
         self.type = 'unknown'
         self.waiting_customers = 0
         self.remain_busy_time = 0
+        self.service_distribution = service_distribution
         # record arrivals and departures
         self.arrival_count = 0
         self.departure_count = 0
@@ -49,7 +50,12 @@ class WorkStation:
         return self.id, self.type
 
     def generate_service_time(self):
-        return np.random.exponential(scale=self.E_service_time)
+        if self.service_distribution == 'exponential' or self.service_distribution == 'exp':
+            return np.random.exponential(scale=self.E_service_time)
+        elif self.service_distribution == 'normal' or self.service_distribution == 'norm':
+            return max(0., self.E_service_time + np.sqrt(self.Var_service_time) * np.random.normal()) # we must truncate the norma
+        else:
+            raise ValueError('unknown service time distribution')
 
     def customer_arrive(self, arrival_event: Arrival):
         arrival_time = arrival_event.time
@@ -97,19 +103,19 @@ class WorkStation:
         plt.savefig('queue over time.png')
 
 class Workstation_I2(WorkStation):
-    def __init__(self, id, x, y, E_service_time, Var_service_time):
-        super().__init__(id, x, y, E_service_time, Var_service_time)
+    def __init__(self, id, x, y, E_service_time, Var_service_time,service_distribution):
+        super().__init__(id, x, y, E_service_time, Var_service_time,service_distribution)
         self.type = 'I2'
 
 class Workstation_I3(WorkStation):
-    def __init__(self, id, x, y, E_service_time, Var_service_time):
-        super().__init__(id, x, y, E_service_time, Var_service_time)
+    def __init__(self, id, x, y, E_service_time, Var_service_time,service_distribution):
+        super().__init__(id, x, y, E_service_time, Var_service_time,service_distribution)
         self.type = 'I3'
 
 class Workstation_I1(WorkStation):
 
-    def __init__(self, id, x, y, E_service_time, Var_service_time, special_pod_size: int, assigned_workstation_I2: WorkStation):
-        super().__init__(id, x, y, E_service_time, Var_service_time)
+    def __init__(self, id, x, y, E_service_time, Var_service_time, special_pod_size: int, assigned_workstation_I2: WorkStation, service_distribution):
+        super().__init__(id, x, y, E_service_time, Var_service_time, service_distribution)
         self.type = 'I1'
         self.special_pod_size = special_pod_size
         self.assigned_workstation_I2 = assigned_workstation_I2
