@@ -47,28 +47,27 @@ class Simulator:
             self.time = self.time + time_diff
             # simulate events
             if event.type=='arrival':
-                next_event = self.workstation_list[event.workstation.id].customer_arrive(event)
+                next_events = self.workstation_list[event.workstation.id].customer_arrive(event)
                 if event.workstation.type in ['I1', 'I3']:
                     self.generate_new_arrivals_one_station(event.workstation.id)
             elif event.type=='departure':
-                next_event = event.workstation.customer_departure(event)
+                next_events = event.workstation.customer_departure(event)
             else:
                 raise ValueError('event type nonexist')
-            if isinstance(next_event, int):
-                pass # if the returned a int, no new event
-            else:
+            for next_event in next_events:
                 self.event_manager.addevent(next_event)
 
-# TODO 1. test simulator
-workstation_list = [Workstation_I3(0, 0, 0, 10, 10*10)
+workstation_list = [Workstation_I3(0, 0, 0, 10, 10 * 10),
+                    Workstation_I2(1, 10, 0, 10, 10 * 10),
+                    Workstation_I2(2, 20, 0, 10, 10 * 10)
                     ]
-#workstation_list.append(Workstation_I1(3,0, 10, 10, 10*10, 100, workstation_list[1]))
-#workstation_list.append(Workstation_I1(4,0, 20, 10, 10*10, 100, workstation_list[2]))
-arrival_rate_dict = {0: 0.05}
-simulation_steps = 10000.
+workstation_list.append(Workstation_I1(3,0, 10, 10, 10*10, 100, workstation_list[1]))
+workstation_list.append(Workstation_I1(4,0, 20, 10, 10*10, 100, workstation_list[2]))
+arrival_rate_dict = {0: 0.05, 3:0.05, 4:0.05}
+simulation_steps = 1000000.
 simulator = Simulator(workstation_list, arrival_rate_dict, simulation_steps)
 simulator.run_simulation()
 for ws in workstation_list:
     ws.flow_stats(total_time=simulation_steps)
-workstation_list[0].plot_queue()
+#workstation_list[0].plot_queue()
 
