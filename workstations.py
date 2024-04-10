@@ -3,7 +3,6 @@ from events import Arrival, Departure
 from util import workstation_travel_time
 import matplotlib.pyplot as plt
 
-
 # workstaion: I1, I2, and I3
 class WorkStation:
     def __init__(self, id, x, y, E_service_time, Var_service_time, service_distribution='exp'):
@@ -27,6 +26,7 @@ class WorkStation:
         self.queue_length_when_departure = []
         self.queue_length_when_event = []
         self.event_time = []
+        self.cv2_service_time = self.Var_service_time / self.E_service_time / self.E_service_time
 
     def record_arrival(self, arrival_time):
         # record arrival time and event
@@ -81,21 +81,33 @@ class WorkStation:
         self.waiting_customers -= 1
         return []
 
-    def flow_stats(self, total_time, cv2_arrival=1.):
+    def estimate_arrival_cv2(self):
+        arrival_time_array = np.array(self.arrival_time_list)
+        arrival_intervals = arrival_time_array[1:]-arrival_time_array[:-1]
+        self.E_inter_arrival_simulation = np.mean(arrival_intervals)
+        self.cv2_inter_arrival_simulation = (np.std(arrival_intervals)/self.E_inter_arrival_simulation)**2.
+
+    def estimate_avg_sojorn_time(self):
         time_array = np.array(self.event_time)
         queue_array = np.array(self.queue_length_when_event)
         time_diff = time_array[1:] - time_array[:-1]
         queue_length = queue_array[1:]
         total_sojourn = np.dot(time_diff, queue_length)
-        avg_sojourn_sim = total_sojourn / self.arrival_count
-        print('avg sojourn time simulation: ', avg_sojourn_sim)
+        self.avg_sojourn_sim = total_sojourn / self.arrival_count
+
+
+    def flow_stats(self, total_time):
+        self.estimate_avg_sojorn_time()
+        self.estimate_arrival_cv2()
         flow = self.arrival_count / total_time
         rho = flow * self.E_service_time
+        self.rho = rho
         assert rho < 1.
-        cv2_service_time = self.Var_service_time / self.E_service_time / self.E_service_time
         sojourn_theory = rho / (1. - rho) * (
-                    cv2_service_time + cv2_arrival) / 2. * self.E_service_time + self.E_service_time
-        print('sojourn time theory', sojourn_theory)
+                    self.cv2_service_time + self.cv2_inter_arrival_simulation) / 2. * self.E_service_time \
+                         + self.E_service_time
+        print('avg sojourn time simulation: ', self.avg_sojourn_sim)
+        print('sojourn time theory with simulated cv', sojourn_theory)
         print('workstation id:', self.id)
         print('number of arrivals', self.arrival_count)
         print('number of departures', self.departure_count)
@@ -111,6 +123,15 @@ class Workstation_I2(WorkStation):
     def __init__(self, id, x, y, E_service_time, Var_service_time, service_distribution):
         super().__init__(id, x, y, E_service_time, Var_service_time, service_distribution)
         self.type = 'I2'
+    def flow_stats(self, total_time):
+        super(Workstation_I2, self).flow_stats(total_time)
+        rho = self.rho
+        sojourn_theory_pure = rho / (1. - rho) * (
+                    self.cv2_service_time) / 2. * self.E_service_time \
+                         + self.E_service_time
+        print('sojourn time theory with 0 cv', sojourn_theory_pure)
+        print('arrival cv2 simulation', self.cv2_inter_arrival_simulation)
+
 
 
 class Workstation_I3(WorkStation):
@@ -145,6 +166,6 @@ class Workstation_I1(WorkStation):
         else:
             return []
 
-    def flow_stats(self, total_time, cv2_arrival=1.):
-        super(Workstation_I1, self).flow_stats(total_time, cv2_arrival)
+    def flow_stats(self, total_time):
+        super(Workstation_I1, self).flow_stats(total_time)
         print('special pod departures', self.special_departure_count)
