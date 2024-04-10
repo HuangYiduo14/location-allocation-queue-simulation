@@ -1,6 +1,5 @@
 import heapq as hq
 
-
 class EventManager:
     def __init__(self):
         self.event_queue = []

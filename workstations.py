@@ -24,7 +24,7 @@ class WorkStation:
         # record queue length
         self.queue_length_when_arrival = []
         self.queue_length_when_departure = []
-        self.queue_length_when_event = []
+        self.queue_length_when_event = [] # event can be arrival or departure, each event has two time records: one for begining queue length, one for ending queue length
         self.event_time = []
         self.cv2_service_time = self.Var_service_time / self.E_service_time / self.E_service_time
 
@@ -60,7 +60,7 @@ class WorkStation:
         else:
             raise ValueError('unknown service time distribution')
 
-    def customer_arrive(self, arrival_event: Arrival):
+    def customer_arrive(self, arrival_event: Arrival): # return corresponding departure event if there is a departure
         arrival_time = arrival_event.time
         token_type = arrival_event.token_type
         # update queue info
@@ -97,6 +97,9 @@ class WorkStation:
 
 
     def flow_stats(self, total_time):
+        print('workstation id:', self.id, '==='*30)
+        print('number of arrivals', self.arrival_count)
+        print('number of departures', self.departure_count)
         self.estimate_avg_sojorn_time()
         self.estimate_arrival_cv2()
         flow = self.arrival_count / total_time
@@ -106,11 +109,9 @@ class WorkStation:
         sojourn_theory = rho / (1. - rho) * (
                     self.cv2_service_time + self.cv2_inter_arrival_simulation) / 2. * self.E_service_time \
                          + self.E_service_time
+        print('--'*20)
         print('avg sojourn time simulation: ', self.avg_sojourn_sim)
         print('sojourn time theory with simulated cv', sojourn_theory)
-        print('workstation id:', self.id)
-        print('number of arrivals', self.arrival_count)
-        print('number of departures', self.departure_count)
 
     def plot_queue(self):
         plt.figure()
@@ -155,7 +156,7 @@ class Workstation_I1(WorkStation):
     def customer_departure(self, departure_event: Departure):
         super(Workstation_I1, self).customer_departure(departure_event)
         self.special_pod_inventory_level += 1
-        if self.special_pod_inventory_level == self.special_pod_size:
+        if self.special_pod_inventory_level == self.special_pod_size: # create special pod flow if the inventory is full after this departure
             departure_time = departure_event.time
             arrival_time_at_I2 = departure_time + workstation_travel_time(self, self.assigned_workstation_I2)
             new_arrival_event = Arrival(arrival_time_at_I2, 'special', self.assigned_workstation_I2)
