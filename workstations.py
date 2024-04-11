@@ -155,7 +155,7 @@ class Workstation_I1(WorkStation):
         self.type = 'I1'
         self.special_pod_size = special_pod_size
         self.assigned_workstation_I2 = assigned_workstation_I2
-        self.special_pod_inventory_level = 0
+        self.special_pod_inventory_level = np.random.randint(special_pod_size)
         self.special_departure_count = 0
         self.special_departure_time_list = []
 

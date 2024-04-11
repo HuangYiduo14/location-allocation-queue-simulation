@@ -160,11 +160,10 @@ if __name__ =='__main__':
     n_X = width // min_distance + 1
     n_Y = height // min_distance + 1
     X = [1. for i in range(n_Y*n_X)]
-
     E_S1=10.
     Var_S1=4.
-    E_S2=10.
-    Var_S2=1.
+    E_S2=100.
+    Var_S2=16.
     special_pod_size=100
     warehouse = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
 
@@ -172,4 +171,5 @@ if __name__ =='__main__':
     simulator = Simulator(warehouse.workstation_dict, warehouse.arrival_rate_dict, simulation_steps)
     simulator.run_simulation()
     for ws in warehouse.workstation_dict.values():
-        ws.flow_stats(total_time=simulation_steps)
+        if ws.type =='I2':
+            ws.flow_stats(total_time=simulation_steps)
