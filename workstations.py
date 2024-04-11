@@ -98,8 +98,12 @@ class WorkStation:
 
     def flow_stats(self, total_time):
         print('workstation id:', self.id, '==='*30)
+        print('type:', self.type)
         print('number of arrivals', self.arrival_count)
         print('number of departures', self.departure_count)
+        if self.arrival_count + self.departure_count<=0:
+            print('unused station')
+            return 'unused station'
         self.estimate_avg_sojorn_time()
         self.estimate_arrival_cv2()
         flow = self.arrival_count / total_time
@@ -125,7 +129,9 @@ class Workstation_I2(WorkStation):
         super().__init__(id, x, y, E_service_time, Var_service_time, service_distribution)
         self.type = 'I2'
     def flow_stats(self, total_time):
-        super(Workstation_I2, self).flow_stats(total_time)
+        is_unused = super(Workstation_I2, self).flow_stats(total_time)
+        if is_unused:
+            return
         rho = self.rho
         sojourn_theory_pure = rho / (1. - rho) * (
                     self.cv2_service_time) / 2. * self.E_service_time \
@@ -153,6 +159,9 @@ class Workstation_I1(WorkStation):
         self.special_departure_count = 0
         self.special_departure_time_list = []
 
+    def assign_I2(self, assigned_workstation_I2):
+        self.assigned_workstation_I2 = assigned_workstation_I2
+
     def customer_departure(self, departure_event: Departure):
         super(Workstation_I1, self).customer_departure(departure_event)
         self.special_pod_inventory_level += 1
@@ -168,5 +177,7 @@ class Workstation_I1(WorkStation):
             return []
 
     def flow_stats(self, total_time):
-        super(Workstation_I1, self).flow_stats(total_time)
+        unused = super(Workstation_I1, self).flow_stats(total_time)
+        if unused:
+            return
         print('special pod departures', self.special_departure_count)
