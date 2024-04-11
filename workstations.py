@@ -140,7 +140,6 @@ class Workstation_I2(WorkStation):
         print('arrival cv2 simulation', self.cv2_inter_arrival_simulation)
 
 
-
 class Workstation_I3(WorkStation):
     def __init__(self, id, x, y, E_service_time, Var_service_time, service_distribution):
         super().__init__(id, x, y, E_service_time, Var_service_time, service_distribution)

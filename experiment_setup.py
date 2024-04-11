@@ -1,7 +1,9 @@
 from workstations import Workstation_I1, Workstation_I2, Workstation_I3
-from util import EPS
+from util import EPS, plot_colored_grid
 from simulator import Simulator
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import colors
 
 class Warehouse:
     def __init__(self, width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size, has_XYZ = False, Y=None, Z=None):
@@ -121,6 +123,14 @@ class Warehouse:
                     Z[(k,i)] = Q_I[k]/xi
         return Y, Z
 
+    def plot_system(self):
+        system_map = np.zeros((self.width+1, self.height+1))
+        type_dict = {'I1':1, 'I2':2, 'I3':3}
+        for ws in self.workstation_dict.values():
+            system_map[int(ws.x), int(ws.y)] = type_dict[ws.type]
+        plot_colored_grid(system_map, colors=['white','green','blue','red'],bounds=[-0.5,0.5,1.5,2.5,3.5])
+
+
     def load_YZ(self, Y: dict, Z: dict):
         # Y[j,i] is the flow from cell j to i
         # Z[k,i] is the flow of special pod from k in I1 to i in I2
@@ -166,7 +176,7 @@ if __name__ =='__main__':
     Var_S2=16.
     special_pod_size=100
     warehouse = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
-
+    #warehouse.plot_system()
     simulation_steps = 100000.
     simulator = Simulator(warehouse.workstation_dict, warehouse.arrival_rate_dict, simulation_steps)
     simulator.run_simulation()
