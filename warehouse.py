@@ -332,8 +332,8 @@ class Warehouse:
 
 if __name__ =='__main__':
 
-    width=16
-    height=16
+    width=20
+    height=20
     min_distance = 4
     demand_density=0.05/min_distance/min_distance/5
 
