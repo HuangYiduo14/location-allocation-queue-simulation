@@ -5,6 +5,10 @@ import numpy as np
 import gurobipy as gp
 from gurobipy import GRB
 
+env = gp.Env(empty=True)
+env.setParam('OutputFlag', 0)
+env.start()
+
 class Warehouse:
     def __init__(self, width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size, has_XYZ = False, Y=None, Z=None):
         self.width = width
@@ -161,17 +165,38 @@ class Warehouse:
                 rho = Q_I2[i] * self.workstation_dict[i].E_service_time
                 assert rho < 1. - EPS
 
-    def solve_socp(self, alpha_list, setting='new'):
-        # setting in ['new', 'kiva']
+    def solve_L1_subproblem(self, pi, alpha_dict, setting='new'):
+        set_I = [ws.id for ws in self.workstation_dict.values()]
+        set_I12 = [ws.id for ws in self.workstation_dict.values() if ws.type != 'I3']
+        mu = [1. / self.workstation_dict[i].E_service_time for i in set_I]
+        # note: due to our constraints on min number of open facility, we choose X with min alpha_dict[i]-pi[i]*mu[i]
+        X_result = {i:0 for i in set_I}
+        for i in set_I:
+            if alpha_dict[i]-pi[i]*mu[i]<0:
+                X_result[i] = 1
+        if setting=='kiva':
+            for i in set_I12:
+                X_result[i] = 0
+        L1_value = np.sum([(alpha_dict[i]-pi[i]*mu[i])*X_result[i] for i in set_I])
+        return L1_value, X_result
+
+    def solve_socp(self, alpha_dict, setting='new', is_solving_L2=False, pi=None, X_fix_value=None):
+        # setting in ['new', 'kiva', 'fix_X']
         # 'new' is our setting with internal ws
         # 'kiva' is old setting
+
+        # if is_solving_L2, we solve the L2 subproblem instead of the original SOCP
+        # in L2 subproblem, all X_i=1 and alpha=0
+
+        # if setting='fix_X', X values should be provided in X_fix_value as a dict
+
         set_I = [ws.id for ws in self.workstation_dict.values()]
         set_I1 = [ws.id for ws in self.workstation_dict.values() if ws.type=='I1']
         set_I2 = [ws.id for ws in self.workstation_dict.values() if ws.type=='I2']
         set_I3 = [ws.id for ws in self.workstation_dict.values() if ws.type=='I3']
         set_I13 = set_I1 + set_I3
         set_J = list(self.J_xy_dict.keys())
-        m = gp.Model("warehouse_workstation")
+        m = gp.Model("warehouse_workstation", env=env)
         # add vars
         X = m.addVars(set_I, lb=0, ub=1, vtype=GRB.BINARY, name='X')
         max_demand_one_pod = np.max(self.demand_map)
@@ -197,16 +222,23 @@ class Warehouse:
         for k in set_I1:
             for i in set_I2:
                 distance_ki[k,i] = workstation_travel_time(self.workstation_dict[k], self.workstation_dict[i])
+        if not is_solving_L2:
+            pi = {i: 0. for i in set_I} # if not solving subproblem l2, set pi to be zeros
+        else:
+            for i in alpha_dict.keys():
+                alpha_dict[i] = 0. # if is solving l2 subproblem, set alpha=0 to remove X in the obj function
+
+        # calculate obj function
         cost_I13_sum = gp.quicksum([
-            alpha_list[i]*X[i] + Q[i]/mu[i]+ (1.+CV_S1_2)/2./mu[i]*G[i] +
+            alpha_dict[i]*X[i] + Q[i]*(1./mu[i]+pi[i])+ (1.+CV_S1_2)/2./mu[i]*G[i] +
             gp.quicksum([
                 distance_ji[j,i]*Y[j,i]
                 for j in set_J
             ])
             for i in set_I13
-        ])
+        ]) # note: pi[i]=0 if not solving l2 subproblem
         cost_I2_sum = gp.quicksum([
-            alpha_list[i] * X[i] + Q[i] / mu[i] + CV_S2_2 / 2. / mu[i] * G[i] +
+            alpha_dict[i] * X[i] + Q[i]* (1./ mu[i]+pi[i]) + CV_S2_2 / 2. / mu[i] * G[i] +
             gp.quicksum([
                 distance_ki[k, i] * Z[k, i]
                 for k in set_I1
@@ -217,43 +249,89 @@ class Warehouse:
         # constraints
         m.addConstrs((Q[i] == gp.quicksum([Y[j,i] for j in set_J]) for i in set_I13), name='5_1') # 5.1
         m.addConstrs((Q[i] == gp.quicksum([Z[k,i] for k in set_I1]) for i in set_I2), name='5_2') # 5.2
-        m.addConstrs((gp.quicksum([Y[j,i] for i in set_I13]) == demand_j[j] for j in set_J),name='5_10') #5.10
+        m.addConstrs((gp.quicksum([Y[j,i] for i in set_I13]) == demand_j[j] for j in set_J),name='5_10') # 5.10
         m.addConstrs((Q[i] <= X[i]*mu[i] for i in set_I), name='5_11') # 5.11
         m.addConstrs((gp.quicksum([Z[k,i] for i in set_I2])==Q[k]/self.special_pod_size for k in set_I1), name='5_12') # 5.12
-        m.addConstrs((Z[k,i]<=big_M*V[k,i] for k in set_I1 for i in set_I2), name='5.13') #5.13
+        m.addConstrs((Z[k,i]<=big_M*V[k,i] for k in set_I1 for i in set_I2), name='5.13') # 5.13
         m.addConstrs((gp.quicksum([V[k,i] for i in set_I2])==1 for k in set_I1), name='5_14') # 5.14
-        m.addConstrs((Q[i]*Q[i] <= G[i]*H[i] for i in set_I),name='5_23') #5.23
-        m.addConstrs((H[i] == mu[i]*X[i]-Q[i] for i in set_I), name='5_24') #5.24
+        m.addConstrs((Q[i]*Q[i] <= G[i]*H[i] for i in set_I),name='5_23') # 5.23
+        m.addConstrs((H[i] == mu[i]*X[i]-Q[i] for i in set_I), name='5_24') # 5.24
         # make sure if one I1 open, then there must be at least one I2 open
         if setting=='new':
             m.addConstr(gp.quicksum([X[i] for i in set_I1])>=1, name='at_least_one_I1')
             m.addConstr(gp.quicksum([X[i] for i in set_I2])>=1, name='at_least_one_I2')
-        else:
+            if is_solving_L2:
+                m.addConstrs((X[i]==1 for i in set_I), name='L2_open_all')
+        elif setting=='kiva':
             m.addConstr(gp.quicksum([X[i] for i in set_I1]) == 0, name='no_I1')
             m.addConstr(gp.quicksum([X[i] for i in set_I2]) == 0, name='no_I2')
-
+            if is_solving_L2:
+                m.addConstrs((X[i]==1 for i in set_I3), name='L2_open_all')
+        elif setting=='fix_X':
+            m.addConstrs((X[i] == X_fix_value[i] for i in set_I), name='fix_X_value')
+            assert not is_solving_L2 # fix_X cannot be used to solve L2
         # solve the problem
         m.optimize()
-        print('Total cost:', m.ObjVal)
-
+        #print('Total cost:', m.ObjVal)
         open_cost = 0.
-        print("SOLUTION:")
+        #print("SOLUTION:")
         for i in set_I:
             if X[i].X > 0.99:
-                print(f"workstation {i} open")
-                print('type:', self.workstation_dict[i].type)
-                open_cost += alpha_list[i]
-
-        print('cost without open cost:', m.ObjVal - open_cost)
-
-        X_values = [X[i].X for i in set_I]
+                # print(f"workstation {i} open")
+                # print('type:', self.workstation_dict[i].type)
+                open_cost += alpha_dict[i]
+        #print('cost without open cost:', m.ObjVal - open_cost)
+        X_values = {i: X[i].X for i in set_I}
         Y_values = {(j,i):Y[j,i].X for j in set_J for i in set_I}
         Z_values = {(k,i):Z[k,i].X for k in set_I1 for i in set_I2}
-        return X_values, Y_values, Z_values
+        Q_values = {i: Q[i].X for i in set_I}
+        if is_solving_L2:
+            L2_value = m.ObjVal
+            return L2_value, Q_values
+        return X_values, Y_values, Z_values, m.ObjVal
+
+    def solve_LR(self, alpha_dict, setting='new'):
+        LB = -np.inf
+        UB = np.inf
+        set_I = [ws.id for ws in self.workstation_dict.values()]
+        mu = [1. / self.workstation_dict[i].E_service_time for i in set_I]
+        pi = {i:10000. for i in set_I}
+        X_with_best_UB = {i:1 for i in set_I}
+        for step in range(1000):
+            #print('sloving L1','---'*30)
+            L1_value, X_result = self.solve_L1_subproblem(pi=pi.copy(), alpha_dict=alpha_dict.copy(), setting=setting)
+            #print('sloving L2', '---' * 30)
+            L2_value, Q_result = self.solve_socp(alpha_dict=alpha_dict.copy(), setting=setting, is_solving_L2=True, pi=pi.copy())
+            L_pi = L1_value +L2_value
+            LB = max(LB, L_pi)
+            #print('sloving UB', '---' * 30)
+            print('X_lb', X_result)
+            try:
+                _,_,_, UB_this = self.solve_socp(alpha_dict=alpha_dict.copy(), setting='fix_X', is_solving_L2=False, X_fix_value=X_result.copy())
+            except:
+                UB_this = np.inf
+
+            if UB_this< UB:
+                X_with_best_UB = X_result.copy()
+                UB = UB_this
+            subgrad = {i:(Q_result[i]-X_result[i]*mu[i]) for i in set_I}
+            subgrad_length_square = np.sum(np.array(list(subgrad.values()))**2)
+            for i in set_I:
+                pi[i] = max(0., pi[i]+(UB-L_pi)/subgrad_length_square*subgrad[i])
+            print('step',step,'best UB:',UB,'LB',LB,'<<<'*30)
+            print('X_ub', X_with_best_UB)
+            print({i: self.workstation_dict[i].type for i in set_I})
+            print('pi', pi)
+            assert UB>=LB
+            if (UB-LB)<1e-3:
+                break
+
+        return X_with_best_UB
 
 
 
 if __name__ =='__main__':
+
     width=16
     height=16
     min_distance = 4
@@ -271,24 +349,26 @@ if __name__ =='__main__':
     warehouse1 = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
     set_I = [ws.id for ws in warehouse1.workstation_dict.values()]
 
-    print('new','=='*50)
-    x1, y1, z1 = warehouse1.solve_socp(alpha_list=[10. for i in set_I], setting='new')
-    simulation_steps = 100000.
-    warehouse1.load_X(x1)
-    warehouse1.load_YZ(y1, z1)
-    simulator1 = Simulator(warehouse1.workstation_dict, warehouse1.arrival_rate_dict, simulation_steps)
-    robot_number1 = simulator1.run_simulation()
-    print('number of robots 1', robot_number1)
+    warehouse1.solve_LR(alpha_dict={i:10. for i in set_I}, setting='new')
 
-    print('kiva', '==' * 50)
-    warehouse2 = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
-    x2, y2, z2 = warehouse2.solve_socp(alpha_list=[10. for i in set_I], setting='kiva')
-    simulation_steps = 100000.
-    warehouse2.load_X(x2)
-    warehouse2.load_YZ(y2, z2)
-    simulator2 = Simulator(warehouse2.workstation_dict, warehouse2.arrival_rate_dict, simulation_steps)
-    robot_number2 = simulator2.run_simulation()
-    print('number of robots 2', robot_number2)
+    # print('new','=='*50)
+    # x1, y1, z1 = warehouse1.solve_socp(alpha_dict={i:10. for i in set_I}, setting='new')
+    # simulation_steps = 100000.
+    # warehouse1.load_X(x1)
+    # warehouse1.load_YZ(y1, z1)
+    # simulator1 = Simulator(warehouse1.workstation_dict, warehouse1.arrival_rate_dict, simulation_steps)
+    # robot_number1 = simulator1.run_simulation()
+    # print('number of robots 1', robot_number1)
+    #
+    # print('kiva', '==' * 50)
+    # warehouse2 = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
+    # x2, y2, z2 = warehouse2.solve_socp(alpha_dict={i:10. for i in set_I}, setting='kiva')
+    # simulation_steps = 100000.
+    # warehouse2.load_X(x2)
+    # warehouse2.load_YZ(y2, z2)
+    # simulator2 = Simulator(warehouse2.workstation_dict, warehouse2.arrival_rate_dict, simulation_steps)
+    # robot_number2 = simulator2.run_simulation()
+    # print('number of robots 2', robot_number2)
 
     #warehouse.plot_system()
     # simulation_steps = 100000.

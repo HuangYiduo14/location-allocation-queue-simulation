@@ -61,7 +61,10 @@ class Simulator:
         number_robots = 0
         for ws in self.workstation_dict.values():
             ws.flow_stats(total_time=self.simulation_steps, output_result=False)
-            number_robots += ws.flow_sim * ws.avg_sojourn_sim
+            try:
+                number_robots += ws.flow_sim * ws.avg_sojourn_sim
+            except:
+                pass
         return number_robots
 
 
