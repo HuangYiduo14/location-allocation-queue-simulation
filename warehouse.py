@@ -302,7 +302,7 @@ class Warehouse:
         Y_with_best_UB = None
         Z_with_best_UB = None
         time0 = time.time()
-        for step in range(1000):
+        for step in range(10000):
             #print('sloving L1','---'*30)
             L1_value, X_result = self.solve_L1_subproblem(pi=pi.copy(), alpha_dict=alpha_dict.copy(), setting=setting)
             #print('sloving L2', '---' * 30)
@@ -370,12 +370,12 @@ if __name__ =='__main__':
 
     warehouse1 = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
     set_I = [ws.id for ws in warehouse1.workstation_dict.values()]
-    X_with_best_UB, Y_with_best_UB, Z_with_best_UB, UB = warehouse1.solve_LR(alpha_dict={i:10. for i in set_I}, setting='new')
+    X_with_best_UB, Y_with_best_UB, Z_with_best_UB, UB = warehouse1.solve_LR(alpha_dict={i:1. for i in set_I}, setting='new')
     robot_number1 = warehouse1.validate_design_using_simulation(X_with_best_UB,Y_with_best_UB, Z_with_best_UB)
 
     warehouse2 = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
-    set_I = [ws.id for ws in warehouse1.workstation_dict.values()]
-    X_with_best_UB2, Y_with_best_UB2, Z_with_best_UB2, UB2 = warehouse2.solve_LR(alpha_dict={i: 10. for i in set_I},
+    set_I = [ws.id for ws in warehouse2.workstation_dict.values()]
+    X_with_best_UB2, Y_with_best_UB2, Z_with_best_UB2, UB2 = warehouse2.solve_LR(alpha_dict={i: 1. for i in set_I},
                                                                              setting='kiva')
     robot_number2 = warehouse2.validate_design_using_simulation(X_with_best_UB2, Y_with_best_UB2, Z_with_best_UB2)
 
