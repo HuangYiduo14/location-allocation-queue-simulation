@@ -255,8 +255,11 @@ if __name__ =='__main__':
     special_pod_size=100
     warehouse = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
     set_I = [ws.id for ws in warehouse.workstation_dict.values()]
-    #warehouse.solve_socp(alpha_list=[10. for i in set_I])
-    warehouse.plot_system()
+    import time
+    time0= time.time()
+    warehouse.solve_socp(alpha_list=[10. for i in set_I])
+    print(time.time()-time0)
+    #warehouse.plot_system()
     # simulation_steps = 100000.
     # simulator = Simulator(warehouse.workstation_dict, warehouse.arrival_rate_dict, simulation_steps)
     # simulator.run_simulation()
