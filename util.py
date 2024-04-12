@@ -28,7 +28,7 @@ def plot_colored_grid(data, colors=['white', 'green'], bounds=[0, 0.5, 1], grid=
 
     # show grid
     if grid:
-        plt.grid(axis='both', color='k', linewidth=2)
+        plt.grid(axis='both', color='k', linewidth=.5)
         plt.xticks(np.arange(0.5, data.shape[1], 1))  # correct grid sizes
         plt.yticks(np.arange(0.5, data.shape[0], 1))
 

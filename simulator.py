@@ -58,6 +58,11 @@ class Simulator:
                 raise ValueError('event type nonexist')
             for next_event in next_events:
                 self.event_manager.addevent(next_event)
+        number_robots = 0
+        for ws in self.workstation_dict.values():
+            ws.flow_stats(total_time=self.simulation_steps, output_result=False)
+            number_robots += ws.flow_sim * ws.avg_sojourn_sim
+        return number_robots
 
 
 # test simulator:

@@ -90,9 +90,9 @@ class Warehouse:
         return I1_assigned_I2
 
     def load_X(self, X):
-        for key, ws in self.workstation_dict.items():
-            if X[key]<EPS:
-                del self.workstation_dict[key]
+        key_to_remove = [key for key in self.workstation_dict.keys() if X[key]<EPS]
+        for key in key_to_remove:
+            self.workstation_dict.pop(key, None)
         self.open_I1 = [ws.id for ws in self.workstation_dict.values() if ws.type=='I1' and X[ws.id] > 1 - EPS]
         self.open_I2 = [ws.id for ws in self.workstation_dict.values() if ws.type=='I2' and X[ws.id] > 1 - EPS]
         self.open_I3 = [ws.id for ws in self.workstation_dict.values() if ws.type=='I3' and X[ws.id] > 1 - EPS]
@@ -136,7 +136,8 @@ class Warehouse:
         # load Y to generate arriving normal pods
         self.arrival_rate_dict = {ws.id: 0. for ws in self.workstation_dict.values() if ws.type != 'I2'}
         for ji in Y.keys():
-            self.arrival_rate_dict[ji[1]] += Y[ji[0],ji[1]]
+            if Y[ji[0],ji[1]]>EPS:
+                self.arrival_rate_dict[ji[1]] += Y[ji[0],ji[1]]
         # load Z to the system
         Q_I2 = dict()
         for ki in Z.keys():
@@ -144,10 +145,10 @@ class Warehouse:
             i = ki[1]
             if Z[k,i]> EPS:
                 self.workstation_dict[k].assign_I2(self.workstation_dict[i])
-            if i in Q_I2.keys():
-                Q_I2[i] += Z[k,i]
-            else:
-                Q_I2[i] = Z[k,i]
+                if i in Q_I2.keys():
+                    Q_I2[i] += Z[k,i]
+                else:
+                    Q_I2[i] = Z[k,i]
         # stability check
         for i in self.open_I1:
             rho = self.arrival_rate_dict[i]* self.workstation_dict[i].E_service_time
@@ -160,7 +161,10 @@ class Warehouse:
                 rho = Q_I2[i] * self.workstation_dict[i].E_service_time
                 assert rho < 1. - EPS
 
-    def solve_socp(self, alpha_list):
+    def solve_socp(self, alpha_list, setting='new'):
+        # setting in ['new', 'kiva']
+        # 'new' is our setting with internal ws
+        # 'kiva' is old setting
         set_I = [ws.id for ws in self.workstation_dict.values()]
         set_I1 = [ws.id for ws in self.workstation_dict.values() if ws.type=='I1']
         set_I2 = [ws.id for ws in self.workstation_dict.values() if ws.type=='I2']
@@ -221,8 +225,12 @@ class Warehouse:
         m.addConstrs((Q[i]*Q[i] <= G[i]*H[i] for i in set_I),name='5_23') #5.23
         m.addConstrs((H[i] == mu[i]*X[i]-Q[i] for i in set_I), name='5_24') #5.24
         # make sure if one I1 open, then there must be at least one I2 open
-        m.addConstr(gp.quicksum([X[i] for i in set_I1])>=1, name='at_least_one_I1')
-        m.addConstr(gp.quicksum([X[i] for i in set_I2])>=1, name='at_least_one_I2')
+        if setting=='new':
+            m.addConstr(gp.quicksum([X[i] for i in set_I1])>=1, name='at_least_one_I1')
+            m.addConstr(gp.quicksum([X[i] for i in set_I2])>=1, name='at_least_one_I2')
+        else:
+            m.addConstr(gp.quicksum([X[i] for i in set_I1]) == 0, name='no_I1')
+            m.addConstr(gp.quicksum([X[i] for i in set_I2]) == 0, name='no_I2')
 
         # solve the problem
         m.optimize()
@@ -238,12 +246,18 @@ class Warehouse:
 
         print('cost without open cost:', m.ObjVal - open_cost)
 
+        X_values = [X[i].X for i in set_I]
+        Y_values = {(j,i):Y[j,i].X for j in set_J for i in set_I}
+        Z_values = {(k,i):Z[k,i].X for k in set_I1 for i in set_I2}
+        return X_values, Y_values, Z_values
+
+
 
 if __name__ =='__main__':
     width=16
     height=16
     min_distance = 4
-    demand_density=0.05/min_distance/min_distance
+    demand_density=0.05/min_distance/min_distance/5
 
     n_X = width // min_distance + 1
     n_Y = height // min_distance + 1
@@ -253,12 +267,29 @@ if __name__ =='__main__':
     E_S2=100.
     Var_S2=16.
     special_pod_size=100
-    warehouse = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
-    set_I = [ws.id for ws in warehouse.workstation_dict.values()]
-    import time
-    time0= time.time()
-    warehouse.solve_socp(alpha_list=[10. for i in set_I])
-    print(time.time()-time0)
+
+    warehouse1 = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
+    set_I = [ws.id for ws in warehouse1.workstation_dict.values()]
+
+    print('new','=='*50)
+    x1, y1, z1 = warehouse1.solve_socp(alpha_list=[10. for i in set_I], setting='new')
+    simulation_steps = 100000.
+    warehouse1.load_X(x1)
+    warehouse1.load_YZ(y1, z1)
+    simulator1 = Simulator(warehouse1.workstation_dict, warehouse1.arrival_rate_dict, simulation_steps)
+    robot_number1 = simulator1.run_simulation()
+    print('number of robots 1', robot_number1)
+
+    print('kiva', '==' * 50)
+    warehouse2 = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
+    x2, y2, z2 = warehouse2.solve_socp(alpha_list=[10. for i in set_I], setting='kiva')
+    simulation_steps = 100000.
+    warehouse2.load_X(x2)
+    warehouse2.load_YZ(y2, z2)
+    simulator2 = Simulator(warehouse2.workstation_dict, warehouse2.arrival_rate_dict, simulation_steps)
+    robot_number2 = simulator2.run_simulation()
+    print('number of robots 2', robot_number2)
+
     #warehouse.plot_system()
     # simulation_steps = 100000.
     # simulator = Simulator(warehouse.workstation_dict, warehouse.arrival_rate_dict, simulation_steps)

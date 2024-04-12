@@ -96,26 +96,29 @@ class WorkStation:
         self.avg_sojourn_sim = total_sojourn / self.arrival_count
 
 
-    def flow_stats(self, total_time):
-        print('workstation id:', self.id, '==='*30)
-        print('type:', self.type)
-        print('number of arrivals', self.arrival_count)
-        print('number of departures', self.departure_count)
+    def flow_stats(self, total_time, output_result=True):
+        if output_result:
+            print('workstation id:', self.id, '==='*30)
+            print('type:', self.type)
+            print('number of arrivals', self.arrival_count)
+            print('number of departures', self.departure_count)
         if self.arrival_count + self.departure_count<=0:
             print('unused station')
             return 'unused station'
         self.estimate_avg_sojorn_time()
         self.estimate_arrival_cv2()
-        flow = self.arrival_count / total_time
+        self.flow_sim = self.arrival_count / total_time
+        flow = self.flow_sim
         rho = flow * self.E_service_time
         self.rho = rho
         assert rho < 1.
         sojourn_theory = rho / (1. - rho) * (
                     self.cv2_service_time + self.cv2_inter_arrival_simulation) / 2. * self.E_service_time \
                          + self.E_service_time
-        print('--'*20)
-        print('avg sojourn time simulation: ', self.avg_sojourn_sim)
-        print('sojourn time theory with simulated cv', sojourn_theory)
+        if output_result:
+            print('--'*20)
+            print('avg sojourn time simulation: ', self.avg_sojourn_sim)
+            print('sojourn time theory with simulated cv', sojourn_theory)
 
     def plot_queue(self):
         plt.figure()
@@ -128,16 +131,17 @@ class Workstation_I2(WorkStation):
     def __init__(self, id, x, y, E_service_time, Var_service_time, service_distribution):
         super().__init__(id, x, y, E_service_time, Var_service_time, service_distribution)
         self.type = 'I2'
-    def flow_stats(self, total_time):
-        is_unused = super(Workstation_I2, self).flow_stats(total_time)
+    def flow_stats(self, total_time, output_result=True):
+        is_unused = super(Workstation_I2, self).flow_stats(total_time, output_result)
         if is_unused:
             return
         rho = self.rho
         sojourn_theory_pure = rho / (1. - rho) * (
                     self.cv2_service_time) / 2. * self.E_service_time \
                          + self.E_service_time
-        print('sojourn time theory with 0 cv', sojourn_theory_pure)
-        print('arrival cv2 simulation', self.cv2_inter_arrival_simulation)
+        if output_result:
+            print('sojourn time theory with 0 cv', sojourn_theory_pure)
+            print('arrival cv2 simulation', self.cv2_inter_arrival_simulation)
 
 
 class Workstation_I3(WorkStation):
@@ -175,8 +179,9 @@ class Workstation_I1(WorkStation):
         else:
             return []
 
-    def flow_stats(self, total_time):
-        unused = super(Workstation_I1, self).flow_stats(total_time)
+    def flow_stats(self, total_time, output_result=True):
+        unused = super(Workstation_I1, self).flow_stats(total_time, output_result)
         if unused:
             return
-        print('special pod departures', self.special_departure_count)
+        if output_result:
+            print('special pod departures', self.special_departure_count)
