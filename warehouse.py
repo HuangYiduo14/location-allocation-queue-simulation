@@ -310,7 +310,7 @@ class Warehouse:
             L_pi = L1_value +L2_value
             LB = max(LB, L_pi)
             #print('sloving UB', '---' * 30)
-            print('X_lb', X_result)
+            #print('X_lb', X_result)
             try:
                 X_best, Y_best, Z_best, UB_this = self.solve_socp(alpha_dict=alpha_dict.copy(), setting='fix_X', is_solving_L2=False, X_fix_value=X_result.copy())
             except:
@@ -326,9 +326,12 @@ class Warehouse:
             for i in set_I:
                 pi[i] = max(0., pi[i]+(UB-L_pi)/subgrad_length_square*subgrad[i])
             print('step',step,'best UB:',UB,'LB',LB,'<<<'*30)
-            print('X_ub', X_with_best_UB)
-            print({i: self.workstation_dict[i].type for i in set_I})
-            print('pi', pi)
+            print('open I1', sum([X_with_best_UB[i] for i in set_I if self.workstation_dict[i].type=='I1']))
+            print('open I2', sum([X_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I2']))
+            print('open I3', sum([X_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I3']))
+            # print('X_ub', X_with_best_UB)
+            # print({i: self.workstation_dict[i].type for i in set_I})
+            # print('pi', pi)
             assert UB>=LB
             if (UB-LB)<1e-3:
                 break
