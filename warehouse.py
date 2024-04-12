@@ -1,3 +1,5 @@
+import time
+
 from workstations import Workstation_I1, Workstation_I2, Workstation_I3
 from util import EPS, plot_colored_grid, workstation_travel_time
 from simulator import Simulator
@@ -297,6 +299,9 @@ class Warehouse:
         mu = [1. / self.workstation_dict[i].E_service_time for i in set_I]
         pi = {i:10000. for i in set_I}
         X_with_best_UB = {i:1 for i in set_I}
+        Y_with_best_UB = None
+        Z_with_best_UB = None
+        time0 = time.time()
         for step in range(1000):
             #print('sloving L1','---'*30)
             L1_value, X_result = self.solve_L1_subproblem(pi=pi.copy(), alpha_dict=alpha_dict.copy(), setting=setting)
@@ -307,12 +312,14 @@ class Warehouse:
             #print('sloving UB', '---' * 30)
             print('X_lb', X_result)
             try:
-                _,_,_, UB_this = self.solve_socp(alpha_dict=alpha_dict.copy(), setting='fix_X', is_solving_L2=False, X_fix_value=X_result.copy())
+                X_best, Y_best, Z_best, UB_this = self.solve_socp(alpha_dict=alpha_dict.copy(), setting='fix_X', is_solving_L2=False, X_fix_value=X_result.copy())
             except:
                 UB_this = np.inf
 
             if UB_this< UB:
-                X_with_best_UB = X_result.copy()
+                X_with_best_UB = X_best.copy()
+                Y_with_best_UB = Y_best.copy()
+                Z_with_best_UB = Z_best.copy()
                 UB = UB_this
             subgrad = {i:(Q_result[i]-X_result[i]*mu[i]) for i in set_I}
             subgrad_length_square = np.sum(np.array(list(subgrad.values()))**2)
@@ -325,10 +332,25 @@ class Warehouse:
             assert UB>=LB
             if (UB-LB)<1e-3:
                 break
+            if time.time()-time0>600.:
+                break
 
-        return X_with_best_UB
+        return X_with_best_UB, Y_with_best_UB, Z_with_best_UB, UB
 
-
+    def validate_design_using_simulation(self, X, Y, Z):
+        # X,Y,Z are dict
+        simulation_steps = 100000.
+        self.load_X(X)
+        self.load_YZ(Y, Z)
+        simulator = Simulator(self.workstation_dict, self.arrival_rate_dict, simulation_steps)
+        robot_number = simulator.run_simulation() # note this number doesn't include robots from pods to stations
+        for ji in Y.keys():
+            if Y[ji]>EPS:
+                x,y = self.J_xy_dict[ji[0]]
+                ws = self.workstation_dict[ji[1]]
+                robot_number += Y[ji]*(abs(x-ws.x)+abs(y-ws.y)) # add number of robots from pods to stations
+        print('number of robots', robot_number)
+        return robot_number
 
 if __name__ =='__main__':
 
@@ -348,9 +370,16 @@ if __name__ =='__main__':
 
     warehouse1 = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
     set_I = [ws.id for ws in warehouse1.workstation_dict.values()]
+    X_with_best_UB, Y_with_best_UB, Z_with_best_UB, UB = warehouse1.solve_LR(alpha_dict={i:10. for i in set_I}, setting='new')
+    robot_number1 = warehouse1.validate_design_using_simulation(X_with_best_UB,Y_with_best_UB, Z_with_best_UB)
 
-    warehouse1.solve_LR(alpha_dict={i:10. for i in set_I}, setting='new')
+    warehouse2 = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
+    set_I = [ws.id for ws in warehouse1.workstation_dict.values()]
+    X_with_best_UB2, Y_with_best_UB2, Z_with_best_UB2, UB2 = warehouse2.solve_LR(alpha_dict={i: 10. for i in set_I},
+                                                                             setting='kiva')
+    robot_number2 = warehouse2.validate_design_using_simulation(X_with_best_UB2, Y_with_best_UB2, Z_with_best_UB2)
 
+    print(robot_number1, robot_number2)
     # print('new','=='*50)
     # x1, y1, z1 = warehouse1.solve_socp(alpha_dict={i:10. for i in set_I}, setting='new')
     # simulation_steps = 100000.

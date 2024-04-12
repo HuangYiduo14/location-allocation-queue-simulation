@@ -1,7 +1,7 @@
 import numpy as np
 from events import EventManager, Arrival, Departure
 from workstations import Workstation_I1, Workstation_I2, Workstation_I3
-
+from util import workstation_travel_time
 class Simulator:
     def __init__(self, workstation_dict, arrival_rate_dict,
                  simulation_steps):  # arrival_rate_dict = {station_id: arrival rate,...}
@@ -58,13 +58,15 @@ class Simulator:
                 raise ValueError('event type nonexist')
             for next_event in next_events:
                 self.event_manager.addevent(next_event)
-        number_robots = 0
+        number_robots = 0.
         for ws in self.workstation_dict.values():
             ws.flow_stats(total_time=self.simulation_steps, output_result=False)
             try:
-                number_robots += ws.flow_sim * ws.avg_sojourn_sim
+                number_robots += 1.*ws.flow_sim * ws.avg_sojourn_sim
             except:
                 pass
+            if ws.type=='I1':
+                number_robots += 1.*ws.departure_count/self.simulation_steps*workstation_travel_time(ws, ws.assigned_workstation_I2)
         return number_robots
 
 
