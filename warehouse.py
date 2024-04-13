@@ -309,6 +309,7 @@ class Warehouse:
         X_with_best_UB = {i:1 for i in set_I}
         Y_with_best_UB = None
         Z_with_best_UB = None
+        Q_with_best_UB = None
         time0 = time.time()
         for step in range(10000):
             #print('sloving L1','---'*30)
