@@ -27,6 +27,8 @@ class WorkStation:
         self.queue_length_when_event = [] # event can be arrival or departure, each event has two time records: one for begining queue length, one for ending queue length
         self.event_time = []
         self.cv2_service_time = self.Var_service_time / self.E_service_time / self.E_service_time
+        if service_distribution in ['exp','exponential']:
+            assert abs(self.cv2_service_time-1)<=1e-6
 
     def record_arrival(self, arrival_time):
         # record arrival time and event
@@ -115,6 +117,7 @@ class WorkStation:
         sojourn_theory = rho / (1. - rho) * (
                     self.cv2_service_time + self.cv2_inter_arrival_simulation) / 2. * self.E_service_time \
                          + self.E_service_time
+        self.sojourn_theory = sojourn_theory
         if output_result:
             print('--'*20)
             print('avg sojourn time simulation: ', self.avg_sojourn_sim)
@@ -136,11 +139,11 @@ class Workstation_I2(WorkStation):
         if is_unused:
             return
         rho = self.rho
-        sojourn_theory_pure = rho / (1. - rho) * (
+        self.sojourn_theory_pure = rho / (1. - rho) * (
                     self.cv2_service_time) / 2. * self.E_service_time \
                          + self.E_service_time
         if output_result:
-            print('sojourn time theory with 0 cv', sojourn_theory_pure)
+            print('sojourn time theory with 0 cv', self.sojourn_theory_pure)
             print('arrival cv2 simulation', self.cv2_inter_arrival_simulation)
 
 

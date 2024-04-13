@@ -8,7 +8,7 @@ import gurobipy as gp
 from gurobipy import GRB
 
 env = gp.Env(empty=True)
-# env.setParam('OutputFlag', 0)
+env.setParam('OutputFlag', 0)
 env.start()
 
 class Warehouse:
@@ -195,10 +195,8 @@ class Warehouse:
         # setting in ['new', 'kiva', 'fix_X']
         # 'new' is our setting with internal ws
         # 'kiva' is old setting
-
         # if is_solving_L2, we solve the L2 subproblem instead of the original SOCP
         # in L2 subproblem, all X_i=1 and alpha=0
-
         # if setting='fix_X', X values should be provided in X_fix_value as a dict
         assert budget>=2
         set_I = [ws.id for ws in self.workstation_dict.values()]
@@ -263,7 +261,7 @@ class Warehouse:
         m.addConstrs((gp.quicksum([Y[j,i] for i in set_I13]) == demand_j[j] for j in set_J),name='5_11')
         m.addConstrs((Q[i] <= X[i]*mu[i] for i in set_I), name='5_12')
         m.addConstrs((gp.quicksum([Z[k,i] for i in set_I2])==Q[k]/self.special_pod_size for k in set_I1), name='5_13')
-        m.addConstrs((Z[k,i]<=big_M*V[k,i] for k in set_I1 for i in set_I2), name='5.14')
+        m.addConstrs((Z[k,i]<=big_M*V[k,i] for k in set_I1 for i in set_I2), name='5_14')
         m.addConstrs((gp.quicksum([V[k,i] for i in set_I2])==1 for k in set_I1), name='5_15')
         m.addConstrs((Q[i]*Q[i] <= G[i]*H[i] for i in set_I),name='5_24')
         m.addConstrs((H[i] == mu[i]*X[i]-Q[i] for i in set_I), name='5_25')
@@ -279,7 +277,7 @@ class Warehouse:
             if is_solving_L2:
                 m.addConstrs((X[i]==1 for i in set_I3), name='L2_open_all')
         elif setting=='fix_X':
-            m.addConstrs((X[i] == X_fix_value[i] for i in set_I), name='fix_X_value')
+            m.addConstrs((X[i] == X_fix_value[i] for i in X_fix_value.keys()), name='fix_X_value')
             assert not is_solving_L2 # fix_X cannot be used to solve L2
         # solve the problem
         m.optimize()
@@ -301,6 +299,8 @@ class Warehouse:
         return X_values, Y_values, Z_values, m.ObjVal, Q_values
 
     def solve_LR(self, budget, setting='new'):
+        LB_history = {}
+        UB_history = {}
         LB = -np.inf
         UB = np.inf
         set_I = [ws.id for ws in self.workstation_dict.values()]
@@ -337,11 +337,15 @@ class Warehouse:
             subgrad = {i:(Q_result[i]-X_result[i]*mu[i]) for i in set_I}
             subgrad_length_square = np.sum(np.array(list(subgrad.values()))**2)
             for i in set_I:
-                pi[i] = max(0., pi[i]+(UB-L_pi)/subgrad_length_square*subgrad[i])
+                pi[i] = max(0., pi[i]+ (UB-L_pi)/subgrad_length_square*subgrad[i])
             print('step',step,'best UB:',UB,'LB',LB,'<<<'*30)
             print('open I1', sum([X_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I1']), 'flow:', sum([Q_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I1']))
             print('open I2', sum([X_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I2']), 'flow:', sum([Q_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I2']))
             print('open I3', sum([X_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I3']), 'flow:', sum([Q_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I3']))
+            if UB<np.inf:
+                UB_history[step] = UB
+            if LB>np.inf:
+                LB_history[step] = LB
             # print('X_ub', X_with_best_UB)
             # print({i: self.workstation_dict[i].type for i in set_I})
             # print('pi', pi)
@@ -350,7 +354,8 @@ class Warehouse:
                 break
             if time.time()-time0>600.:
                 break
-
+            self.UB_history = UB_history
+            self.LB_history = LB_history
         return X_with_best_UB, Y_with_best_UB, Z_with_best_UB, UB
 
     def validate_design_using_simulation(self, X, Y, Z):
@@ -370,8 +375,8 @@ class Warehouse:
 
 if __name__ =='__main__':
 
-    width=20
-    height=20
+    width=16
+    height=16
     min_distance = 4
     demand_density=0.05/min_distance/min_distance/5
 
@@ -384,19 +389,27 @@ if __name__ =='__main__':
     Var_S2=16.
     special_pod_size=100
 
-
     warehouse1 = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
-    X_with_best_UB, Y_with_best_UB, Z_with_best_UB, UB1,_ = warehouse1.solve_socp(budget=5, setting='new')
+    X_with_best_UB, Y_with_best_UB, Z_with_best_UB, UB1,_ = warehouse1.solve_socp(budget=5, setting='kiva')
     print('UB1',UB1,'<<<'*30)
-    robot_number1 = warehouse1.validate_design_using_simulation(X_with_best_UB,Y_with_best_UB, Z_with_best_UB)
+    warehouse1.load_X(X_with_best_UB)
+    warehouse1.plot_system()
+    #robot_number1 = warehouse1.validate_design_using_simulation(X_with_best_UB,Y_with_best_UB, Z_with_best_UB)
 
     warehouse2 = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
-    X_with_best_UB2, Y_with_best_UB2, Z_with_best_UB2, UB2,_ = warehouse2.solve_socp(budget=5, setting='kiva')
-    print('UB2',UB2,'<<<'*30)
-    robot_number2 = warehouse2.validate_design_using_simulation(X_with_best_UB2, Y_with_best_UB2, Z_with_best_UB2)
+    X_with_best_UB2, Y_with_best_UB2, Z_with_best_UB2, UB2 = warehouse2.solve_LR(budget=5, setting='new')
+    print('UB2', UB2, '<<<' * 30)
+    warehouse2.load_X(X_with_best_UB)
+    warehouse2.plot_system()
+    import pdb; pdb.set_trace()
+    #robot_number1 = warehouse1.validate_design_using_simulation(X_with_best_UB, Y_with_best_UB, Z_with_best_UB)
+    # warehouse2 = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
+    # X_with_best_UB2, Y_with_best_UB2, Z_with_best_UB2, UB2,_ = warehouse2.solve_socp(budget=5, setting='kiva')
+    # print('UB2',UB2,'<<<'*30)
+    # robot_number2 = warehouse2.validate_design_using_simulation(X_with_best_UB2, Y_with_best_UB2, Z_with_best_UB2)
     #
     # warehouse2 = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
-    # set_I = [ws.id for ws in warehouse2.workstation_dict.values()]
+    # set_I = [ws.id for ws $in warehouse2.workstation_dict.values()]
     # X_with_best_UB2, Y_with_best_UB2, Z_with_best_UB2, UB2 = warehouse2.solve_LR(budget=5, setting='kiva')
     # robot_number2 = warehouse2.validate_design_using_simulation(X_with_best_UB2, Y_with_best_UB2, Z_with_best_UB2)
 

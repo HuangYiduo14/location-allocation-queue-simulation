@@ -70,23 +70,83 @@ class Simulator:
         return number_robots
 
 
+def exp1_change_rho(output_file_name = 'rho_result.csv'):
+    import pandas as pd
+    exp_record = []
+    for rho2 in np.arange(0.01, 0.99, 0.01):
+        print(rho2)
+        ES2 = 100
+        VarS2 = 16.
+        special_pod_size = 100
+        workstation_dict = {
+            0: Workstation_I2(id=0, x=10, y=0, E_service_time=ES2, Var_service_time=VarS2, service_distribution='norm'),
+        }
+        departure_rate_I1 = rho2 / ES2
+        arrival_rate_I1 = departure_rate_I1 * special_pod_size
+        rho1 = 0.5
+        ES1 = rho1 / arrival_rate_I1
+        VarS1 = (ES1 / 3.) ** 2.
+        # import pdb; pdb.set_trace()
+        workstation_dict[1] = Workstation_I1(id=1, x=0, y=10, E_service_time=ES1,
+                                             Var_service_time=VarS1, special_pod_size=special_pod_size,
+                                             assigned_workstation_I2=workstation_dict[0], service_distribution='norm')
+        arrival_rate_dict = {1: arrival_rate_I1}
+        simulation_steps = 10000 * ES2
+        simulator = Simulator(workstation_dict, arrival_rate_dict, simulation_steps)
+        simulator.run_simulation()
+        for ws in workstation_dict.values():
+            ws.flow_stats(total_time=simulation_steps)
+
+        #error_predict_theorem = 1./special_pod_size*rho2*(1.+abs(VarS1/ES1/ES1-1))/(2.*(1.-rho2)+rho2*VarS2/ES2/ES2)
+        error_predict_theorem = rho2/2./special_pod_size/(1.-rho2)*(1.+abs(VarS1/ES1/ES1-1.))
+        exp_record.append([ES1, ES2, arrival_rate_I1, rho1, rho2, workstation_dict[0].sojourn_theory_pure,
+                           workstation_dict[0].sojourn_theory, workstation_dict[0].avg_sojourn_sim,
+                           workstation_dict[0].cv2_inter_arrival_simulation, error_predict_theorem])
+    exp_result = pd.DataFrame(exp_record,
+                              columns=['ES1', 'ES2', 'arrival rate I1', 'rho1', 'rho2', 'approximated sojourn time',
+                                       'Kingman formula sojourn time', 'simulation sojourn time',
+                                       'CV of inter-arrival at I2', 'error predict theorem'])
+    exp_result.to_csv(output_file_name)
+
+def exp1_change_capacity(output_file_name='capacity_result.csv'):
+    import pandas as pd
+    exp_record = []
+    rho2 = 0.2
+    for special_pod_size in range(20, 200):
+        print(special_pod_size)
+        special_pod_size = int(special_pod_size)
+        ES2 = 100
+        VarS2 = 16.
+        workstation_dict = {
+            0: Workstation_I2(id=0, x=10, y=0, E_service_time=ES2, Var_service_time=VarS2, service_distribution='norm'),
+        }
+        departure_rate_I1 = rho2 / ES2
+        arrival_rate_I1 = departure_rate_I1 * special_pod_size
+        rho1 = 0.5
+        ES1 = rho1 / arrival_rate_I1
+        VarS1 = (ES1 / 3.) ** 2.
+        # import pdb; pdb.set_trace()
+        workstation_dict[1] = Workstation_I1(id=1, x=0, y=10, E_service_time=ES1,
+                                             Var_service_time=VarS1, special_pod_size=special_pod_size,
+                                             assigned_workstation_I2=workstation_dict[0], service_distribution='norm')
+        arrival_rate_dict = {1: arrival_rate_I1}
+        simulation_steps = 10000 * ES2
+        simulator = Simulator(workstation_dict, arrival_rate_dict, simulation_steps)
+        simulator.run_simulation()
+        for ws in workstation_dict.values():
+            ws.flow_stats(total_time=simulation_steps)
+        error_predict_theorem = rho2 / 2. / special_pod_size / (1. - rho2) * (1. + abs(VarS1 / ES1 / ES1 - 1.))
+        exp_record.append([ES1, ES2, arrival_rate_I1, rho1, rho2, workstation_dict[0].sojourn_theory_pure,
+                           workstation_dict[0].sojourn_theory, workstation_dict[0].avg_sojourn_sim,
+                           workstation_dict[0].cv2_inter_arrival_simulation, special_pod_size, error_predict_theorem])
+    exp_result = pd.DataFrame(exp_record,
+                              columns=['ES1', 'ES2', 'arrival rate I1', 'rho1', 'rho2', 'approximated sojourn time',
+                                       'Kingman formula sojourn time', 'simulation sojourn time',
+                                       'CV of inter-arrival at I2','special pod capacity','error_predict_theorem'])
+    exp_result.to_csv(output_file_name)
+
 # test simulator:
 if __name__ == '__main__':
-    workstation_dict = {
-        0: Workstation_I3(id=0, x=0, y=0, E_service_time=10, Var_service_time=4, service_distribution='norm'),
-        1: Workstation_I2(id=1, x=10, y=0, E_service_time=100, Var_service_time=4, service_distribution='norm'),
-        2: Workstation_I2(id=2, x=10, y=10, E_service_time=100, Var_service_time=4, service_distribution='norm'),
-    }
-    workstation_dict[3] = Workstation_I1(id=3, x=0, y=10, E_service_time=10,
-                                           Var_service_time=4, special_pod_size=100,
-                                           assigned_workstation_I2=workstation_dict[1], service_distribution='norm')
-    workstation_dict[4] = Workstation_I1(id=4, x=0, y=20, E_service_time=10,
-                                           Var_service_time=4, special_pod_size=100,
-                                           assigned_workstation_I2=workstation_dict[2], service_distribution='norm')
-    arrival_rate_dict = {0: 0.05, 3: 0.05, 4: 0.05}
-    simulation_steps = 100000.
-    simulator = Simulator(workstation_dict, arrival_rate_dict, simulation_steps)
-    simulator.run_simulation()
-    for ws in workstation_dict.values():
-        ws.flow_stats(total_time=simulation_steps)
+    exp1_change_rho()
+    exp1_change_capacity()
     #workstation_dict[0].plot_queue()
