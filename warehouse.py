@@ -198,6 +198,7 @@ class Warehouse:
         # if is_solving_L2, we solve the L2 subproblem instead of the original SOCP
         # in L2 subproblem, all X_i=1 and alpha=0
         # if setting='fix_X', X values should be provided in X_fix_value as a dict
+        # currently, with fix_X, solve the new setting only
         assert budget>=2
         set_I = [ws.id for ws in self.workstation_dict.values()]
         set_I1 = [ws.id for ws in self.workstation_dict.values() if ws.type=='I1']
@@ -276,9 +277,12 @@ class Warehouse:
             m.addConstr(gp.quicksum([X[i] for i in set_I2]) == 0, name='no_I2')
             if is_solving_L2:
                 m.addConstrs((X[i]==1 for i in set_I3), name='L2_open_all')
-        elif setting=='fix_X':
+        elif setting=='fix_X': # with fix X we only consider new settings
             m.addConstrs((X[i] == X_fix_value[i] for i in X_fix_value.keys()), name='fix_X_value')
-            assert not is_solving_L2 # fix_X cannot be used to solve L2
+            if is_solving_L2:
+                for i in set_I:
+                    if not (i in X_fix_value.keys()):
+                        m.addConstr(X[i]==1)
         # solve the problem
         m.optimize()
         X_values = {i: X[i].X for i in set_I}
@@ -341,6 +345,8 @@ class Warehouse:
             for i in set_I:
                 if UB<np.inf:
                     pi[i] = max(0., pi[i]+ alpha_t*(UB-L_pi)/subgrad_length_square*subgrad[i])
+                else:
+                    pi[i] = max(0., pi[i] + alpha_t/ subgrad_length_square * subgrad[i])
             print('step',step,'best UB:',UB,'LB',LB,'L_pi',L_pi,'<<<'*30)
             if UB<np.inf:
                 print('open I1', sum([X_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I1']), 'flow:', sum([Q_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I1']))
