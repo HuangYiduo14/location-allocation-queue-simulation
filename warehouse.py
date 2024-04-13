@@ -41,9 +41,6 @@ class Warehouse:
             self.load_X(X)
             Y,Z = self.genearte_YZ()
             self.load_YZ(Y,Z)
-            print(X)
-            print(Y)
-            print(Z)
 
     def generate_cells(self):
         j = 0
@@ -293,6 +290,14 @@ class Warehouse:
         if is_solving_L2:
             L2_value = m.ObjVal
             return L2_value, Q_values
+
+        if (not is_solving_L2) and (setting!='fix_X'):
+            print('open I1', sum([X_values[i] for i in set_I if self.workstation_dict[i].type == 'I1']), 'flow:',
+                  sum([Q_values[i] for i in set_I if self.workstation_dict[i].type == 'I1']))
+            print('open I2', sum([X_values[i] for i in set_I if self.workstation_dict[i].type == 'I2']), 'flow:',
+                  sum([Q_values[i] for i in set_I if self.workstation_dict[i].type == 'I2']))
+            print('open I3', sum([X_values[i] for i in set_I if self.workstation_dict[i].type == 'I3']), 'flow:',
+                  sum([Q_values[i] for i in set_I if self.workstation_dict[i].type == 'I3']))
         return X_values, Y_values, Z_values, m.ObjVal, Q_values
 
     def solve_LR(self, budget, setting='new'):
