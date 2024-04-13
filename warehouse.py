@@ -255,7 +255,7 @@ class Warehouse:
         ])
         m.setObjective(cost_I13_sum+cost_I2_sum, sense=GRB.MINIMIZE)
         # constraints
-        m.addConstr(gp.quicksum([X[i] for i in set_I])==budget, name='budget') #budget constr
+        m.addConstr(gp.quicksum([X[i] for i in set_I])<=budget, name='budget') #budget constr
         m.addConstrs((Q[i] == gp.quicksum([Y[j,i] for j in set_J]) for i in set_I13), name='5_1') # 5.1
         m.addConstrs((Q[i] == gp.quicksum([Z[k,i] for k in set_I1]) for i in set_I2), name='5_2') # 5.2
         m.addConstrs((gp.quicksum([Y[j,i] for i in set_I13]) == demand_j[j] for j in set_J),name='5_11')
@@ -305,12 +305,14 @@ class Warehouse:
         UB = np.inf
         set_I = [ws.id for ws in self.workstation_dict.values()]
         mu = [1. / self.workstation_dict[i].E_service_time for i in set_I]
-        pi = {i:10000. for i in set_I}
+        pi = {i:10. for i in set_I}
         X_with_best_UB = {i:1 for i in set_I}
         Y_with_best_UB = None
         Z_with_best_UB = None
         Q_with_best_UB = None
         time0 = time.time()
+        count_no_improve_LB = 0
+        alpha_t = 2.
         for step in range(10000):
             #print('sloving L1','---'*30)
             L1_value, X_result = self.solve_L1_subproblem(pi=pi.copy(), budget=int(budget), setting=setting)
@@ -328,7 +330,6 @@ class Warehouse:
                 Z_best = dict()
                 Q_best = dict()
                 UB_this = np.inf
-
             if UB_this< UB:
                 X_with_best_UB = X_best.copy()
                 Y_with_best_UB = Y_best.copy()
@@ -338,23 +339,33 @@ class Warehouse:
             subgrad = {i:(Q_result[i]-X_result[i]*mu[i]) for i in set_I}
             subgrad_length_square = np.sum(np.array(list(subgrad.values()))**2)
             for i in set_I:
-                pi[i] = max(0., pi[i]+ (UB-L_pi)/subgrad_length_square*subgrad[i])
-            print('step',step,'best UB:',UB,'LB',LB,'<<<'*30)
-            print('open I1', sum([X_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I1']), 'flow:', sum([Q_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I1']))
-            print('open I2', sum([X_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I2']), 'flow:', sum([Q_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I2']))
-            print('open I3', sum([X_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I3']), 'flow:', sum([Q_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I3']))
+                if UB<np.inf:
+                    pi[i] = max(0., pi[i]+ alpha_t*(UB-L_pi)/subgrad_length_square*subgrad[i])
+            print('step',step,'best UB:',UB,'LB',LB,'L_pi',L_pi,'<<<'*30)
+            if UB<np.inf:
+                print('open I1', sum([X_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I1']), 'flow:', sum([Q_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I1']))
+                print('open I2', sum([X_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I2']), 'flow:', sum([Q_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I2']))
+                print('open I3', sum([X_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I3']), 'flow:', sum([Q_with_best_UB[i] for i in set_I if self.workstation_dict[i].type == 'I3']))
             if UB<np.inf:
                 UB_history[step] = UB
             if LB>np.inf:
                 LB_history[step] = LB
+                if step>1 and LB>=LB_history[step-1]:
+                    count_no_improve_LB += 1
+            if count_no_improve_LB>=100:
+                alpha_t = alpha_t/2.
+                count_no_improve_LB = 0
+                print('decrease step')
             # print('X_ub', X_with_best_UB)
             # print({i: self.workstation_dict[i].type for i in set_I})
             # print('pi', pi)
+
             assert UB>=LB
             if (UB-LB)<1e-3:
                 break
             if time.time()-time0>600.:
                 break
+
             self.UB_history = UB_history
             self.LB_history = LB_history
         return X_with_best_UB, Y_with_best_UB, Z_with_best_UB, UB
@@ -393,12 +404,12 @@ if __name__ =='__main__':
     warehouse1 = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
     X_with_best_UB, Y_with_best_UB, Z_with_best_UB, UB1,_ = warehouse1.solve_socp(budget=5, setting='kiva')
     print('UB1',UB1,'<<<'*30)
-    warehouse1.load_X(X_with_best_UB)
-    warehouse1.plot_system()
+    #warehouse1.load_X(X_with_best_UB)
+    #warehouse1.plot_system()
     #robot_number1 = warehouse1.validate_design_using_simulation(X_with_best_UB,Y_with_best_UB, Z_with_best_UB)
 
     warehouse2 = Warehouse(width, height, demand_density, min_distance, X, E_S1, Var_S1, E_S2, Var_S2, special_pod_size)
-    X_with_best_UB2, Y_with_best_UB2, Z_with_best_UB2, UB2 = warehouse2.solve_LR(budget=5, setting='new')
+    X_with_best_UB2, Y_with_best_UB2, Z_with_best_UB2, UB2 = warehouse2.solve_LR(budget=5, setting='kiva')
     print('UB2', UB2, '<<<' * 30)
     warehouse2.load_X(X_with_best_UB)
     warehouse2.plot_system()
